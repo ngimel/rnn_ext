@@ -24,11 +24,15 @@ namespace at { namespace native {
        int64_t batch_size = a.size(1);
        auto blasHandle = at::cuda::getCurrentCUDABlasHandle();
        cublasSetMathMode(blasHandle, CUBLAS_TENSOR_OP_MATH);
-       cuda::CUDAStream s1=nullptr, s2=nullptr;
+       // default constructors are now illegal - create something and reassign if using streams
+       c10::cuda::CUDAStream s1 = c10::cuda::getDefaultCUDAStream();
+       c10::cuda::CUDAStream s2 = c10::cuda::getDefaultCUDAStream();
        at::cuda::CUDAEvent event;
+       bool isHighPriority = false;
+       int device = 0;
        if (use_streams == true){
-           s1 = at::cuda::createCUDAStream();
-           s2 = at::cuda::createCUDAStream();
+           s1 = c10::cuda::getStreamFromPool(isHighPriority, device);
+           s2 = c10::cuda::getStreamFromPool(isHighPriority, device);
        }
 //gemm: 
        int m = w1.size(1);
@@ -67,7 +71,7 @@ namespace at { namespace native {
                                    CUDA_R_32F, CUBLAS_GEMM_DFALT_TENSOR_OP);
            AT_CHECK(err==0, "error in cublas"); 
            if (use_streams) {
-              s2.synchronize_with(event);
+              event.block(s2);
            }
         
           int numThreads = 256;
